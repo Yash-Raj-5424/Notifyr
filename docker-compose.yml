@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: notifyr_postgres
+    environment:
+      POSTGRES_DB: notifyr_db
+      POSTGRES_USER: notifyr_user
+      POSTGRES_PASSWORD: notifyr_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: notify_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI port
+
+volumes:
+  postgres_data:
