@@ -4,6 +4,7 @@ import com.yash.Notifyr.dto.NotificationMessage;
 import com.yash.Notifyr.dto.NotificationRequest;
 import com.yash.Notifyr.entity.Notification;
 import com.yash.Notifyr.entity.NotificationStatus;
+import com.yash.Notifyr.exception.NotificationNotFoundException;
 import com.yash.Notifyr.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,5 +51,10 @@ public class NotificationService {
         log.info("Notification {} queued for recipient {}", notification.getId(), notification.getRecipientEmail());
 
         return notification;
+    }
+
+    public Notification getNotificationById(Long id){
+        return notificationRepository.findById(id)
+                .orElseThrow(() -> new NotificationNotFoundException("Notification with id " + id + " not found"));
     }
 }

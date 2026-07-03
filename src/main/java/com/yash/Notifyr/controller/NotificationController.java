@@ -20,14 +20,27 @@ public class NotificationController {
     @PostMapping("/send")
     public ResponseEntity<NotificationResponse> send(@Valid @RequestBody NotificationRequest request) {
         Notification notification = notificationService.sendNotification(request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(mapToResponse(notification));
+    }
 
-        NotificationResponse response = new NotificationResponse(
+
+    @GetMapping("/{id}")
+    public ResponseEntity<NotificationResponse> getById(@PathVariable Long id) {
+        Notification notification = notificationService.getNotificationById(id);
+        return ResponseEntity.ok(mapToResponse(notification));
+    }
+
+
+    private NotificationResponse mapToResponse(Notification notification) {
+        return new NotificationResponse(
                 notification.getId(),
                 notification.getRecipientEmail(),
-                notification.getStatus()
+                notification.getStatus(),
+                notification.getSubject(),
+                notification.getFailureReason(),
+                notification.getCreatedAt(),
+                notification.getUpdatedAt()
         );
-
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
     @GetMapping("/health")
