@@ -2,6 +2,7 @@ package com.yash.Notifyr.service;
 
 import com.yash.Notifyr.dto.NotificationMessage;
 import com.yash.Notifyr.dto.NotificationRequest;
+import com.yash.Notifyr.dto.NotificationResponse;
 import com.yash.Notifyr.entity.Notification;
 import com.yash.Notifyr.entity.NotificationStatus;
 import com.yash.Notifyr.exception.NotificationNotFoundException;
@@ -10,7 +11,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +23,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final RabbitTemplate rabbitTemplate;
+    private final RedisTemplate<String, NotificationResponse> redisTemplate;
 
     @Value("${notification.exchange.name}")
     private String exchangeName;
@@ -26,7 +31,22 @@ public class NotificationService {
     @Value("${notification.routing-key}")
     private String routingKey;
 
-    public Notification sendNotification(NotificationRequest request){
+    private static final String IDEMPOTENCY_KEY_PREFIX = "idempotency:";
+    private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
+
+    public NotificationResponse sendNotification(NotificationRequest request, String idempotencyKey){
+
+        // Check if the idempotency key exists in Redis
+        if(idempotencyKey != null && !idempotencyKey.isBlank()) {
+            String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
+            NotificationResponse cachedResponse = redisTemplate.opsForValue().get(redisKey);
+
+            if (cachedResponse != null) {
+                log.info("Key already processed. Returning cached response for key: {}", idempotencyKey);
+                return cachedResponse;
+            }
+        }
+
 
         Notification notification = Notification.builder()
                 .recipientEmail(request.getRecipientEmail())
@@ -50,11 +70,35 @@ public class NotificationService {
 
         log.info("Notification {} queued for recipient {}", notification.getId(), notification.getRecipientEmail());
 
-        return notification;
+        NotificationResponse response = mapToResponse(notification);
+
+        // cache the response
+        if(idempotencyKey != null && !idempotencyKey.isBlank()) {
+            String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
+            redisTemplate.opsForValue().set(redisKey, response, IDEMPOTENCY_TTL);
+        }
+
+        return response;
     }
 
-    public Notification getNotificationById(Long id){
-        return notificationRepository.findById(id)
-                .orElseThrow(() -> new NotificationNotFoundException("Notification with id " + id + " not found"));
+    private NotificationResponse mapToResponse(Notification notification) {
+        return new NotificationResponse(
+                notification.getId(),
+                notification.getRecipientEmail(),
+                notification.getStatus(),
+                notification.getSubject(),
+                notification.getFailureReason(),
+                notification.getCreatedAt(),
+                notification.getUpdatedAt()
+        );
+    }
+
+    public NotificationResponse getNotificationById(Long id) {
+
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new NotificationNotFoundException("Notification: " + id + " not found"));
+
+        return mapToResponse(notification);
+
     }
 }

@@ -18,30 +18,19 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     @PostMapping("/send")
-    public ResponseEntity<NotificationResponse> send(@Valid @RequestBody NotificationRequest request) {
-        Notification notification = notificationService.sendNotification(request);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(mapToResponse(notification));
+    public ResponseEntity<NotificationResponse> send(@Valid @RequestBody NotificationRequest request,
+                                                     @RequestHeader(value="Idempotency-Key",
+                                                             required=false) String idempotencyKey) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(notificationService.sendNotification(request, idempotencyKey));
     }
 
 
     @GetMapping("/{id}")
     public ResponseEntity<NotificationResponse> getById(@PathVariable Long id) {
-        Notification notification = notificationService.getNotificationById(id);
-        return ResponseEntity.ok(mapToResponse(notification));
+        return ResponseEntity.ok(notificationService.getNotificationById(id));
     }
 
-
-    private NotificationResponse mapToResponse(Notification notification) {
-        return new NotificationResponse(
-                notification.getId(),
-                notification.getRecipientEmail(),
-                notification.getStatus(),
-                notification.getSubject(),
-                notification.getFailureReason(),
-                notification.getCreatedAt(),
-                notification.getUpdatedAt()
-        );
-    }
 
     @GetMapping("/health")
     public String healthCheck() {
