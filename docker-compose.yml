@@ -16,7 +16,9 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management
     container_name: notify_rabbitmq
-    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: notifyr_user
+      RABBITMQ_DEFAULT_PASS: notifyr_password
     ports:
       - "5672:5672"   # AMQP protocol port
       - "15672:15672" # Management UI port
