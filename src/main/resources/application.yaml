@@ -28,6 +28,7 @@ spring:
 
 notification:
   simulate-failure-rate: 0.1
+  api-key: my-secret-api-key
   queue:
     name: notification.queue
   exchange:
