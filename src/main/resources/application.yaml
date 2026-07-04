@@ -27,6 +27,7 @@ spring:
     password: notifyr_password
 
 notification:
+  simulate-failure-rate: 0.1
   queue:
     name: notification.queue
   exchange:

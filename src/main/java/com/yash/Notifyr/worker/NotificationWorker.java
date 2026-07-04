@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+import java.util.Random;
 
 @Component
 @RequiredArgsConstructor
@@ -123,15 +124,22 @@ public class NotificationWorker {
                 nextRetryCount, routingKey, e.getMessage());
     }
 
+    @Value("${notification.simulate-failure-rate:0.1}")
+    private double simulateFailureRate;
+    private final Random random = new Random();
+
     private void simulateSend(NotificationMessage message) throws InterruptedException {
 
         Thread.sleep(1000);
+        if(random.nextDouble() < simulateFailureRate){
+            throw new RuntimeException("Simulated random send failure for testing");
+        }
 
         if(message.getRecipientEmail().contains("fail")){
             throw new RuntimeException("Simulated send failure for testing");
         }
 
-        log.info("Simulating email sent to {} subject='{}' body='{}'", message.getRecipientEmail(),
+        log.info("Simulating email sent to {} | subject='{}' | body='{}'", message.getRecipientEmail(),
                 message.getSubject(), message.getMessage());
     }
 
