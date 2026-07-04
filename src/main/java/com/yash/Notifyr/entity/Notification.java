@@ -42,6 +42,10 @@ public class Notification {
 
     private String failureReason;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer retryCount = 0;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

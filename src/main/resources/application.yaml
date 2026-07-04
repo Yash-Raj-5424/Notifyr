@@ -32,6 +32,21 @@ notification:
   exchange:
     name: notification.exchange
   routing-key: notification.route
+  retry:
+    exchange: notification.retry.exchange
+    queue-30s: notification.retry.30s
+    queue-2m: notification.retry.2m
+    queue-5m: notification.retry.5m
+    routing-key-30s: retry.30s
+    routing-key-2m: retry.2m
+    routing-key-5m: retry.5m
+    ttl-30s: 5000
+    ttl-2m: 10000
+    ttl-5m: 15000
+  dlq:
+    exchange: notification.dlq.exchange
+    queue: notification.dlq
+    routing-key: dlq.route
 
 server:
   port: 8080

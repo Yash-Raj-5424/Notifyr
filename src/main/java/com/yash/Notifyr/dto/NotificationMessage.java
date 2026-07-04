@@ -13,4 +13,5 @@ public class NotificationMessage {
     private String recipientEmail;
     private String subject;
     private String message;
+    private int retryCount;
 }

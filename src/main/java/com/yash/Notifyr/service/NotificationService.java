@@ -62,7 +62,8 @@ public class NotificationService {
                 notification.getId(),
                 notification.getRecipientEmail(),
                 notification.getSubject(),
-                notification.getMessage()
+                notification.getMessage(),
+                0
         );
 
         // publish to rabbitmq
