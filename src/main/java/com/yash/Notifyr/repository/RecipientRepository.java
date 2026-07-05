@@ -1,0 +1,20 @@
+package com.yash.Notifyr.repository;
+
+
+import com.yash.Notifyr.entity.Recipient;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface RecipientRepository extends JpaRepository<Recipient, Long> {
+
+    Optional<Recipient> findByEmail(String email);
+
+    @Query("SELECT r FROM Recipient r WHERE " +
+    "LOWER(r.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+    "LOWER(r.email) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+    List<Recipient> searchByNameOrEmail(@Param("keyword") String keyword);
+}

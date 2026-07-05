@@ -1,0 +1,51 @@
+package com.yash.Notifyr.controller;
+
+import com.yash.Notifyr.dto.RecipientRequest;
+import com.yash.Notifyr.dto.RecipientResponse;
+import com.yash.Notifyr.service.RecipientService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/recipients")
+@RequiredArgsConstructor
+public class RecipientController {
+
+    private final RecipientService recipientService;
+
+    @PostMapping
+    public ResponseEntity<RecipientResponse> create(@Valid @RequestBody RecipientRequest request){
+        RecipientResponse response = recipientService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<RecipientResponse>> getAll(@RequestParam(required = false) String search){
+        if(search != null && !search.isEmpty()){
+            return ResponseEntity.ok(recipientService.search(search));
+        }
+        return ResponseEntity.ok(recipientService.getAll());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<RecipientResponse> getById(@PathVariable Long id){
+        return ResponseEntity.ok(recipientService.getById(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<RecipientResponse> update(@PathVariable Long id,
+                                                    @Valid @RequestBody RecipientRequest request){
+        return ResponseEntity.ok(recipientService.update(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id){
+        recipientService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+}
