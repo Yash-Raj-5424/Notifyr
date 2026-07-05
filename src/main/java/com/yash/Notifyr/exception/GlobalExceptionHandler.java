@@ -18,14 +18,28 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(RecipientNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleRecipientNotFound(RecipientNotFoundException ex) {
+    public ResponseEntity<Map<String, String>> handleRecipientNotFound(RecipientNotFoundException ex){
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(Map.of("error", ex.getMessage()));
     }
 
     @ExceptionHandler(DuplicateEmailException.class)
-    public ResponseEntity<Map<String, String>> handleDuplicateEmail(DuplicateEmailException ex) {
+    public ResponseEntity<Map<String, String>> handleDuplicateEmail(DuplicateEmailException ex){
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(TemplateNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleTemplateNotFound(TemplateNotFoundException ex){
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateTemplateNameException.class)
+    public ResponseEntity<Map<String, String>> handleDuplicateTemplateName(DuplicateTemplateNameException ex){
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(Map.of("error", ex.getMessage()));
