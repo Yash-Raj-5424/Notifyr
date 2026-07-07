@@ -43,6 +43,14 @@ public class Campaign {
     private List<Long> recipientIds = new ArrayList<>();
 
     @ElementCollection
+    @CollectionTable(name = "campaign_audience_tags", joinColumns = @JoinColumn(name = "campaign_id"))
+    @Column(name = "tag")
+    @Builder.Default
+    private List<String> audienceTags = new ArrayList<>();
+
+    private String audienceLanguage;
+
+    @ElementCollection
     @CollectionTable(name = "campaign_template_variables", joinColumns = @JoinColumn(name = "campaign_id"))
     @MapKeyColumn(name = "var_key")
     @Column(name = "var_value")

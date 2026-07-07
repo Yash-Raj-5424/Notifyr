@@ -21,6 +21,8 @@ public class CampaignResponse {
     private NotificationChannel channel;
     private Long templateId;
     private List<Long> recipientIds;
+    private List<String> audienceTags;
+    private String audienceLanguage;
     private Map<String, String> templateVariables;
     private CampaignStatus status;
     private LocalDateTime createdAt;

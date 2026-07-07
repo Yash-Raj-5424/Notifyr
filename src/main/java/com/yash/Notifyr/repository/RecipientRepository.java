@@ -2,6 +2,7 @@ package com.yash.Notifyr.repository;
 
 
 import com.yash.Notifyr.entity.Recipient;
+import com.yash.Notifyr.entity.RecipientStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,4 +18,7 @@ public interface RecipientRepository extends JpaRepository<Recipient, Long> {
     "LOWER(r.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
     "LOWER(r.email) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     List<Recipient> searchByNameOrEmail(@Param("keyword") String keyword);
+
+    List<Recipient> findByStatusNot(RecipientStatus status);
+
 }

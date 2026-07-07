@@ -27,8 +27,11 @@ public class CampaignRequest {
     @NotNull(message = "templateId is required")
     private Long templateId;
 
-    @NotEmpty(message = "At least one recipient is required")
     private List<Long> recipientIds;
+
+    private String audienceLanguage;
+
+    private List<String> audienceTags;
 
     private Map<String, String> templateVariables;
 }

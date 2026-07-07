@@ -4,10 +4,7 @@ import com.yash.Notifyr.dto.CampaignRequest;
 import com.yash.Notifyr.dto.CampaignResponse;
 import com.yash.Notifyr.dto.NotificationMessage;
 import com.yash.Notifyr.entity.*;
-import com.yash.Notifyr.exception.CampaignNotFoundException;
-import com.yash.Notifyr.exception.RecipientNotFoundException;
-import com.yash.Notifyr.exception.TemplateNotFoundException;
-import com.yash.Notifyr.exception.UnsupportedChannelException;
+import com.yash.Notifyr.exception.*;
 import com.yash.Notifyr.repository.CampaignRepository;
 import com.yash.Notifyr.repository.NotificationRepository;
 import com.yash.Notifyr.repository.RecipientRepository;
@@ -40,14 +37,18 @@ public class CampaignService {
     @Value("${notification.routing-key}")
     private String routingKey;
 
-    public CampaignResponse create(CampaignRequest request){
+    public CampaignResponse create(CampaignRequest request) {
 
         templaterepository.findById(request.getTemplateId())
                 .orElseThrow(() -> new TemplateNotFoundException(request.getTemplateId()));
 
-        for(Long recipientId : request.getRecipientIds()){
-            recipientRepository.findById(recipientId)
-                    .orElseThrow(() -> new RecipientNotFoundException(recipientId));
+        validateTargeting(request); // validate targeting criteria
+
+        if (request.getRecipientIds() != null) {
+            for (Long recipientId : request.getRecipientIds()) {
+                recipientRepository.findById(recipientId)
+                        .orElseThrow(() -> new RecipientNotFoundException(recipientId));
+            }
         }
 
         Campaign campaign = Campaign.builder()
@@ -55,10 +56,10 @@ public class CampaignService {
                 .description(request.getDescription())
                 .channel(request.getChannel())
                 .templateId(request.getTemplateId())
-                .recipientIds(request.getRecipientIds())
-                .templateVariables(
-                        request.getTemplateVariables() != null ?
-                        request.getTemplateVariables() : new HashMap<>())
+                .recipientIds(request.getRecipientIds() != null ? request.getRecipientIds() : List.of())
+                .audienceTags(request.getAudienceTags() != null ? request.getAudienceTags() : List.of())
+                .templateVariables(request.getTemplateVariables() != null
+                        ? request.getTemplateVariables() : new HashMap<>())
                 .status(CampaignStatus.DRAFT)
                 .build();
 
@@ -84,11 +85,15 @@ public class CampaignService {
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new CampaignNotFoundException(id));
 
+        validateTargeting(request);
+
         campaign.setName(request.getName());
         campaign.setDescription(request.getDescription());
         campaign.setChannel(request.getChannel());
         campaign.setTemplateId(request.getTemplateId());
-        campaign.setRecipientIds(request.getRecipientIds());
+        campaign.setRecipientIds(request.getRecipientIds() != null ? request.getRecipientIds() : List.of());
+        campaign.setAudienceTags(request.getAudienceTags() != null ? request.getAudienceTags() : List.of());
+        campaign.setAudienceLanguage(request.getAudienceLanguage());
         campaign.setTemplateVariables(
                 request.getTemplateVariables() != null ?
                 request.getTemplateVariables() : new HashMap<>());
@@ -116,14 +121,14 @@ public class CampaignService {
         Template template = templaterepository.findById(campaign.getTemplateId())
                 .orElseThrow(() -> new TemplateNotFoundException(campaign.getTemplateId()));
 
+        // find all recipients based on targeting criteria
+        List<Recipient> targetRecipients = resolveRecipients(campaign);
+
         campaign.setStatus(CampaignStatus.RUNNING);
         campaignRepository.save(campaign);
 
         // send notifications to all recipients
-        for(Long recipientId : campaign.getRecipientIds()) {
-
-            Recipient recipient = recipientRepository.findById(recipientId)
-                    .orElseThrow(() -> new RecipientNotFoundException(recipientId));
+        for(Recipient recipient : targetRecipients) {
 
             Map<String, String> variables = new HashMap<>(campaign.getTemplateVariables());
             variables.put("name", recipient.getName());
@@ -165,6 +170,55 @@ public class CampaignService {
         return mapToResponse(campaign);
     }
 
+    private List<Recipient> resolveRecipients(Campaign campaign) {
+
+        List<Recipient> candidates;
+        boolean hasExplicitIds = campaign.getRecipientIds() != null
+                && !campaign.getRecipientIds().isEmpty();
+
+        if(hasExplicitIds){
+            candidates = campaign.getRecipientIds().stream()
+                    .map(id -> recipientRepository.findById(id)
+                            .orElseThrow(() -> new RecipientNotFoundException(id)))
+                    .toList();
+        }else{
+            candidates = recipientRepository.findByStatusNot(RecipientStatus.UNSUBSCRIBED);
+
+            boolean hasTags = campaign.getAudienceTags() != null
+                    && !campaign.getAudienceTags().isEmpty();
+            boolean hasLanguages = campaign.getAudienceLanguage() != null
+                    && !campaign.getAudienceLanguage().isEmpty();
+
+            if(hasTags){
+                candidates = candidates.stream()
+                        .filter(r -> r.getTags() != null && !r.getTags().isEmpty())
+                        .filter(r -> r.getTags().stream().anyMatch(campaign.getAudienceTags()::contains))
+                        .toList();
+            }
+            if(hasLanguages){
+                candidates = candidates.stream()
+                        .filter(r -> campaign.getAudienceLanguage().equals(r.getPreferredLanguage()))
+                        .toList();
+            }
+        }
+
+        // exclude unsubscribed recipients always
+        return candidates.stream()
+                .filter(r -> r.getStatus() != RecipientStatus.UNSUBSCRIBED)
+                .toList();
+    }
+
+    private void validateTargeting(CampaignRequest request) {
+        boolean hasRecipientIds = request.getRecipientIds() != null && !request.getRecipientIds().isEmpty();
+        boolean hasAudienceTags = request.getAudienceTags() != null && !request.getAudienceTags().isEmpty();
+        boolean hasAudienceLanguage = request.getAudienceLanguage() != null
+                && !request.getAudienceLanguage().isEmpty();
+
+        if (!hasRecipientIds && !hasAudienceTags && !hasAudienceLanguage) {
+            throw new InvalidCampaignTargetException();
+        }
+    }
+
     private CampaignResponse mapToResponse(Campaign campaign) {
         return new CampaignResponse(
                 campaign.getId(),
@@ -173,6 +227,8 @@ public class CampaignService {
                 campaign.getChannel(),
                 campaign.getTemplateId(),
                 campaign.getRecipientIds(),
+                campaign.getAudienceTags(),
+                campaign.getAudienceLanguage(),
                 campaign.getTemplateVariables(),
                 campaign.getStatus(),
                 campaign.getCreatedAt(),

@@ -2,6 +2,7 @@ package com.yash.Notifyr.controller;
 
 import com.yash.Notifyr.dto.RecipientRequest;
 import com.yash.Notifyr.dto.RecipientResponse;
+import com.yash.Notifyr.dto.RecipientStatusUpdateRequest;
 import com.yash.Notifyr.service.RecipientService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,15 @@ public class RecipientController {
     public ResponseEntity<RecipientResponse> update(@PathVariable Long id,
                                                     @Valid @RequestBody RecipientRequest request){
         return ResponseEntity.ok(recipientService.update(id, request));
+    }
+
+    // update status
+    @PutMapping("/{id}/status")
+    public ResponseEntity<RecipientResponse> updateStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody RecipientStatusUpdateRequest request
+    ){
+        return ResponseEntity.ok(recipientService.updateStatus(id, request.getStatus()));
     }
 
     @DeleteMapping("/{id}")

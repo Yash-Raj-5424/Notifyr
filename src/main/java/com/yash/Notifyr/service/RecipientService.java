@@ -3,6 +3,7 @@ package com.yash.Notifyr.service;
 import com.yash.Notifyr.dto.RecipientRequest;
 import com.yash.Notifyr.dto.RecipientResponse;
 import com.yash.Notifyr.entity.Recipient;
+import com.yash.Notifyr.entity.RecipientStatus;
 import com.yash.Notifyr.exception.DuplicateEmailException;
 import com.yash.Notifyr.exception.RecipientNotFoundException;
 import com.yash.Notifyr.repository.RecipientRepository;
@@ -86,6 +87,16 @@ public class RecipientService {
                 .orElseThrow(() -> new RecipientNotFoundException(id));
 
         recipientRepository.delete(recipient);
+    }
+
+    // update status
+    public RecipientResponse updateStatus(Long id, RecipientStatus status){
+        Recipient recipient = recipientRepository.findById(id)
+                .orElseThrow(() -> new RecipientNotFoundException(id));
+
+        recipient.setStatus(status);
+        recipient = recipientRepository.save(recipient);
+        return mapToResponse(recipient);
     }
 
     private RecipientResponse mapToResponse(Recipient recipient) {
