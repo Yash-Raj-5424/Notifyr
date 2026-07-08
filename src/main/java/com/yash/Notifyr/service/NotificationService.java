@@ -67,9 +67,16 @@ public class NotificationService {
         );
 
         // publish to rabbitmq
-        rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
-
-        log.info("Notification {} queued for recipient {}", notification.getId(), notification.getRecipientEmail());
+        try {
+            rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
+            log.info("Notification {} queued for recipient {}", notification.getId(), notification.getRecipientEmail());
+        }catch (Exception e){
+            notification.setStatus(NotificationStatus.FAILED);
+            notification.setFailureReason("Failed to publish to queue: {}" + e.getMessage());
+            notificationRepository.save(notification);
+            log.error("Failed to publish notification {} to queue: {}"
+                    , notification.getId(), e.getMessage());
+        }
 
         NotificationResponse response = mapToResponse(notification);
 

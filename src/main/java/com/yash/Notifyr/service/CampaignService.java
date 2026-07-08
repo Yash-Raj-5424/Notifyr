@@ -123,6 +123,10 @@ public class CampaignService {
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new CampaignNotFoundException(campaignId));
 
+        if(campaign.getStatus() != CampaignStatus.DRAFT && campaign.getStatus() != CampaignStatus.SCHEDULED){
+            throw new CampaignAlreadySentException(campaign.getId(), campaign.getStatus());
+        }
+
         if(campaign.getChannel() != NotificationChannel.EMAIL){
             throw new UnsupportedChannelException(campaign.getChannel());
         }
@@ -136,6 +140,8 @@ public class CampaignService {
 
         campaign.setStatus(CampaignStatus.RUNNING);
         campaignRepository.save(campaign);
+
+        int failedToQueue = 0;
 
         // send notifications to all recipients
         for(Recipient recipient : targetRecipients) {
@@ -164,19 +170,27 @@ public class CampaignService {
                     0
             );
 
-            rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
+            try {
+                rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
 
-            log.info("Campaign {} : queued notification {} for recipient {}"
-                    ,campaignId, notification.getId(), recipient.getEmail());
+                log.info("Campaign {} : queued notification {} for recipient {}"
+                        , campaignId, notification.getId(), recipient.getEmail());
+            }catch(Exception e){
+                notification.setStatus(NotificationStatus.FAILED);
+                notification.setFailureReason("Failed to publish to queue: " + e.getMessage());
+                notificationRepository.save(notification);
+                failedToQueue++;
+                log.error("Campaign {} : failed to queue notification {} for recipient {}: {}",
+                        campaign.getId(), notification.getId(), recipient.getEmail(), e.getMessage());
+            }
 
         }
 
-        campaign.setStatus(CampaignStatus.COMPLETED);
+        campaign.setStatus(failedToQueue == 0 ? CampaignStatus.COMPLETED : CampaignStatus.FAILED);
         campaignRepository.save(campaign);
 
-        log.info("Campaign {} : completed : {} notifications queued"
-                ,campaign.getId(), campaign.getRecipientIds().size());
-
+        log.info("Campaign {} : finished - {} queued, {} failed to queue"
+                , campaign.getId(), targetRecipients.size() - failedToQueue, failedToQueue);
         return mapToResponse(campaign);
     }
 

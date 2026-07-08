@@ -73,4 +73,11 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(CampaignAlreadySentException.class)
+    public ResponseEntity<Map<String, String>> handleCampaignAlreadySent(CampaignAlreadySentException ex) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
 }
