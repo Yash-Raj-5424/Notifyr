@@ -67,6 +67,8 @@ public class Campaign {
 
     private LocalDateTime updatedAt;
 
+    private LocalDateTime scheduledTime;
+
     @PrePersist
     protected void onCreate(){
         this.createdAt = LocalDateTime.now();

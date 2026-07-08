@@ -66,4 +66,11 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(InvalidScheduleTimeException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidScheduleTime(InvalidScheduleTimeException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
 }

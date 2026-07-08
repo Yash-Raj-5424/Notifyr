@@ -44,6 +44,15 @@ public class CampaignService {
 
         validateTargeting(request); // validate targeting criteria
 
+        CampaignStatus initialStatus = CampaignStatus.DRAFT;
+
+        if(request.getScheduledTime() != null){
+            if(request.getScheduledTime().isBefore(java.time.LocalDateTime.now())){
+                throw new InvalidScheduleTimeException();
+            }
+            initialStatus = CampaignStatus.SCHEDULED;
+        }
+
         if (request.getRecipientIds() != null) {
             for (Long recipientId : request.getRecipientIds()) {
                 recipientRepository.findById(recipientId)
@@ -60,7 +69,8 @@ public class CampaignService {
                 .audienceTags(request.getAudienceTags() != null ? request.getAudienceTags() : List.of())
                 .templateVariables(request.getTemplateVariables() != null
                         ? request.getTemplateVariables() : new HashMap<>())
-                .status(CampaignStatus.DRAFT)
+                .scheduledTime(request.getScheduledTime())
+                .status(initialStatus)
                 .build();
 
         campaign = campaignRepository.save(campaign);
@@ -232,7 +242,8 @@ public class CampaignService {
                 campaign.getTemplateVariables(),
                 campaign.getStatus(),
                 campaign.getCreatedAt(),
-                campaign.getUpdatedAt()
+                campaign.getUpdatedAt(),
+                campaign.getScheduledTime()
         );
     }
 

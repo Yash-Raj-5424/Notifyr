@@ -27,4 +27,5 @@ public class CampaignResponse {
     private CampaignStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime scheduledTime;
 }
