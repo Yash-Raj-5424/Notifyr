@@ -1,5 +1,6 @@
 package com.yash.Notifyr.service;
 
+import com.yash.Notifyr.dto.CampaignDispatchMessage;
 import com.yash.Notifyr.dto.CampaignRequest;
 import com.yash.Notifyr.dto.CampaignResponse;
 import com.yash.Notifyr.dto.NotificationMessage;
@@ -36,6 +37,15 @@ public class CampaignService {
 
     @Value("${notification.routing-key}")
     private String routingKey;
+
+    @Value("${notification.campaign-dispatch.exchange}")
+    private String campaignDispatchExchangeName;
+
+    @Value("${notification.campaign-dispatch.queue}")
+    private String campaignDispatchQueueName;
+
+    @Value("${notification.campaign-dispatch.routing-key}")
+    private String campaignDispatchRoutingKey;
 
     public CampaignResponse create(CampaignRequest request) {
 
@@ -118,6 +128,7 @@ public class CampaignService {
         campaignRepository.delete(campaign);
     }
 
+    // validates and triggers the dispatch
     public CampaignResponse send(Long campaignId){
 
         Campaign campaign = campaignRepository.findById(campaignId)
@@ -131,6 +142,24 @@ public class CampaignService {
             throw new UnsupportedChannelException(campaign.getChannel());
         }
 
+        campaign.setStatus(CampaignStatus.RUNNING);
+        campaignRepository.save(campaign);
+
+        CampaignDispatchMessage dispatchMessage = new CampaignDispatchMessage(campaign.getId());
+        rabbitTemplate.convertAndSend(campaignDispatchExchangeName, campaignDispatchRoutingKey, dispatchMessage);
+
+        log.info("Campaign {} : dispatch triggered, message published to {}"
+                ,campaign.getId(), campaignDispatchQueueName);
+
+        return mapToResponse(campaign);
+    }
+
+    // called by dispatch worker - handles the actual fan-out
+    public void processDispatch(Long campaignId){
+
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new CampaignNotFoundException(campaignId));
+
         // fetch template for this campaign
         Template template = templaterepository.findById(campaign.getTemplateId())
                 .orElseThrow(() -> new TemplateNotFoundException(campaign.getTemplateId()));
@@ -138,12 +167,9 @@ public class CampaignService {
         // find all recipients based on targeting criteria
         List<Recipient> targetRecipients = resolveRecipients(campaign);
 
-        campaign.setStatus(CampaignStatus.RUNNING);
-        campaignRepository.save(campaign);
-
         int failedToQueue = 0;
 
-        // send notifications to all recipients
+        // send notifications to all target recipients
         for(Recipient recipient : targetRecipients) {
 
             Map<String, String> variables = new HashMap<>(campaign.getTemplateVariables());
@@ -170,7 +196,7 @@ public class CampaignService {
                     0
             );
 
-            try {
+            try{
                 rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
 
                 log.info("Campaign {} : queued notification {} for recipient {}"
@@ -191,7 +217,6 @@ public class CampaignService {
 
         log.info("Campaign {} : finished - {} queued, {} failed to queue"
                 , campaign.getId(), targetRecipients.size() - failedToQueue, failedToQueue);
-        return mapToResponse(campaign);
     }
 
     private List<Recipient> resolveRecipients(Campaign campaign) {

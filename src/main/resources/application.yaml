@@ -49,6 +49,10 @@ notification:
     exchange: notification.dlq.exchange
     queue: notification.dlq
     routing-key: dlq.route
+  campaign-dispatch:
+    exchange: campaign.dispatch.exchange
+    queue: campaign.dispatch.queue
+    routing-key: campaign.dispatch.route
 
 server:
   port: 8080

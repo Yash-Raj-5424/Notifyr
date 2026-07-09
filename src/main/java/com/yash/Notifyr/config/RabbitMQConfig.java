@@ -60,6 +60,16 @@ public class RabbitMQConfig {
     @Value("${notification.retry.ttl-5m}")
     private long ttl5m;
 
+    @Value("${notification.campaign-dispatch.exchange}")
+    private String campaignDispatchExchangeName;
+
+    @Value("${notification.campaign-dispatch.queue}")
+    private String campaignDispatchQueueName;
+
+    @Value("${notification.campaign-dispatch.routing-key}")
+    private String campaignDispatchRoutingKey;
+
+
     @Bean
     public Queue notificationQueue() {
         return new Queue(queueName, true);
@@ -147,5 +157,25 @@ public class RabbitMQConfig {
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
+    }
+
+    @Bean
+    public DirectExchange campaignDispatchExchange(){
+        return new DirectExchange(campaignDispatchExchangeName);
+    }
+
+    @Bean
+    public Queue campaignDispatchQueue(){
+        return new Queue(campaignDispatchQueueName, true);
+    }
+
+    @Bean
+    public Binding campaignDispatchBinding(
+            Queue campaignDispatchQueue,
+            DirectExchange campaignDispatchExchange){
+
+        return BindingBuilder.bind(campaignDispatchQueue)
+                .to(campaignDispatchExchange)
+                .with(campaignDispatchRoutingKey);
     }
 }
