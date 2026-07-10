@@ -26,9 +26,23 @@ spring:
     username: notifyr_user
     password: notifyr_password
 
+  mail:
+    host: live.smtp.mailtrap.io
+    port: 587
+    username: ${MAILTRAP_USERNAME}
+    password: ${MAILTRAP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 notification:
-  simulate-failure-rate: 0.1
-  api-key: my-secret-api-key
+  mail:
+    from: hello@demomailtrap.co
+  simulate-failure-rate: 0.0
+  api-key: ${API_KEY}
   queue:
     name: notification.queue
   exchange:

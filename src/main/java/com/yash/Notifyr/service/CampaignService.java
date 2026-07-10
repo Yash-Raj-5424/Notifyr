@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -155,68 +156,76 @@ public class CampaignService {
     }
 
     // called by dispatch worker - handles the actual fan-out
+    @Transactional
     public void processDispatch(Long campaignId){
 
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new CampaignNotFoundException(campaignId));
 
         // fetch template for this campaign
-        Template template = templaterepository.findById(campaign.getTemplateId())
-                .orElseThrow(() -> new TemplateNotFoundException(campaign.getTemplateId()));
+        try {
+            Template template = templaterepository.findById(campaign.getTemplateId())
+                    .orElseThrow(() -> new TemplateNotFoundException(campaign.getTemplateId()));
 
-        // find all recipients based on targeting criteria
-        List<Recipient> targetRecipients = resolveRecipients(campaign);
+            // find all recipients based on targeting criteria
+            List<Recipient> targetRecipients = resolveRecipients(campaign);
 
-        int failedToQueue = 0;
+            int failedToQueue = 0;
 
-        // send notifications to all target recipients
-        for(Recipient recipient : targetRecipients) {
+            // send notifications to all target recipients
+            for (Recipient recipient : targetRecipients) {
 
-            Map<String, String> variables = new HashMap<>(campaign.getTemplateVariables());
-            variables.put("name", recipient.getName());
-            variables.put("email", recipient.getEmail());
+                Map<String, String> variables = new HashMap<>(campaign.getTemplateVariables());
+                variables.put("name", recipient.getName());
+                variables.put("email", recipient.getEmail());
 
-            String renderedSubject = templateService.render(template.getSubject(), variables);
-            String renderedBody = templateService.render(template.getBody(), variables);
+                String renderedSubject = templateService.render(template.getSubject(), variables);
+                String renderedBody = templateService.render(template.getBody(), variables);
 
-            Notification notification = Notification.builder()
-                    .recipientEmail(recipient.getEmail())
-                    .subject(renderedSubject)
-                    .message(renderedBody)
-                    .status(NotificationStatus.QUEUED)
-                    .build();
+                Notification notification = Notification.builder()
+                        .recipientEmail(recipient.getEmail())
+                        .subject(renderedSubject)
+                        .message(renderedBody)
+                        .status(NotificationStatus.QUEUED)
+                        .build();
 
-            notification = notificationRepository.save(notification);
+                notification = notificationRepository.save(notification);
 
-            NotificationMessage message = new NotificationMessage(
-                    notification.getId(),
-                    notification.getRecipientEmail(),
-                    notification.getSubject(),
-                    notification.getMessage(),
-                    0
-            );
+                NotificationMessage message = new NotificationMessage(
+                        notification.getId(),
+                        notification.getRecipientEmail(),
+                        notification.getSubject(),
+                        notification.getMessage(),
+                        0
+                );
 
-            try{
-                rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
+                try {
+                    rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
 
-                log.info("Campaign {} : queued notification {} for recipient {}"
-                        , campaignId, notification.getId(), recipient.getEmail());
-            }catch(Exception e){
-                notification.setStatus(NotificationStatus.FAILED);
-                notification.setFailureReason("Failed to publish to queue: " + e.getMessage());
-                notificationRepository.save(notification);
-                failedToQueue++;
-                log.error("Campaign {} : failed to queue notification {} for recipient {}: {}",
-                        campaign.getId(), notification.getId(), recipient.getEmail(), e.getMessage());
+                    log.info("Campaign {} : queued notification {} for recipient {}"
+                            , campaignId, notification.getId(), recipient.getEmail());
+                } catch (Exception e) {
+                    notification.setStatus(NotificationStatus.FAILED);
+                    notification.setFailureReason("Failed to publish to queue: " + e.getMessage());
+                    notificationRepository.save(notification);
+                    failedToQueue++;
+                    log.error("Campaign {} : failed to queue notification {} for recipient {}: {}",
+                            campaign.getId(), notification.getId(), recipient.getEmail(), e.getMessage());
+                }
+
             }
 
+            campaign.setStatus(failedToQueue == 0 ? CampaignStatus.COMPLETED : CampaignStatus.FAILED);
+            campaignRepository.save(campaign);
+
+            log.info("Campaign {} : finished - {} queued, {} failed to queue"
+                    , campaign.getId(), targetRecipients.size() - failedToQueue, failedToQueue);
+        }catch(Exception e){
+            campaign.setStatus(CampaignStatus.FAILED);
+            campaignRepository.save(campaign);
+            log.error("Campaign {} : dispatch failed due to error: {}", campaign.getId(), e.getMessage());
+            throw e;
         }
-
-        campaign.setStatus(failedToQueue == 0 ? CampaignStatus.COMPLETED : CampaignStatus.FAILED);
-        campaignRepository.save(campaign);
-
-        log.info("Campaign {} : finished - {} queued, {} failed to queue"
-                , campaign.getId(), targetRecipients.size() - failedToQueue, failedToQueue);
     }
 
     private List<Recipient> resolveRecipients(Campaign campaign) {

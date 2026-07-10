@@ -3,6 +3,7 @@ package com.yash.Notifyr.worker;
 import com.yash.Notifyr.dto.NotificationMessage;
 import com.yash.Notifyr.entity.Notification;
 import com.yash.Notifyr.entity.NotificationStatus;
+import com.yash.Notifyr.provider.EmailProvider;
 import com.yash.Notifyr.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ public class NotificationWorker {
 
     private final NotificationRepository notificationRepository;
     private final RabbitTemplate rabbitTemplate;
+    private final EmailProvider emailProvider;
 
     @Value("${notification.retry.exchange}")
     private String retryExchangeName;
@@ -40,7 +42,11 @@ public class NotificationWorker {
     @Value("${notification.dlq.routing-key}")
     private String dlqRoutingKey;
 
+    @Value("${notification.simulate-failure-rate:0.0}")
+    private double simulateFailureRate;
+
     private static final int MAX_RETRIES = 3;
+    private final Random random = new Random();
 
     @RabbitListener(queues = "${notification.queue.name}")
     public void handleNotification(NotificationMessage message){
@@ -59,7 +65,7 @@ public class NotificationWorker {
         notificationRepository.save(notification);
 
         try{
-            simulateSend(message);
+            sendEmail(message);
 
             notification.setStatus(NotificationStatus.SENT);
             notification.setRetryCount(message.getRetryCount());
@@ -69,6 +75,14 @@ public class NotificationWorker {
         }catch(Exception e) {
             handleFailure(notification, message, e);
         }
+    }
+
+    private void sendEmail(NotificationMessage message) throws Exception {
+        if(random.nextDouble() < simulateFailureRate){
+            throw new RuntimeException("Simulated provider failure");
+        }
+
+        emailProvider.send(message.getRecipientEmail(), message.getSubject(), message.getMessage());
     }
 
     private void handleFailure(Notification notification, NotificationMessage message, Exception e) {
@@ -124,9 +138,6 @@ public class NotificationWorker {
                 nextRetryCount, routingKey, e.getMessage());
     }
 
-    @Value("${notification.simulate-failure-rate:0.1}")
-    private double simulateFailureRate;
-    private final Random random = new Random();
 
     private void simulateSend(NotificationMessage message) throws InterruptedException {
 

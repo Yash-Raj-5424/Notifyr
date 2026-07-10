@@ -40,6 +40,7 @@ public class Notification {
 
     private LocalDateTime updatedAt;
 
+    @Column(columnDefinition = "TEXT")
     private String failureReason;
 
     @Column(nullable = false)
