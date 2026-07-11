@@ -2,8 +2,10 @@ package com.yash.Notifyr.worker;
 
 import com.yash.Notifyr.dto.NotificationMessage;
 import com.yash.Notifyr.entity.Notification;
+import com.yash.Notifyr.entity.NotificationChannel;
 import com.yash.Notifyr.entity.NotificationStatus;
 import com.yash.Notifyr.provider.EmailProvider;
+import com.yash.Notifyr.provider.SmsProvider;
 import com.yash.Notifyr.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,7 @@ public class NotificationWorker {
     private final NotificationRepository notificationRepository;
     private final RabbitTemplate rabbitTemplate;
     private final EmailProvider emailProvider;
+    private final SmsProvider smsProvider;
 
     @Value("${notification.retry.exchange}")
     private String retryExchangeName;
@@ -65,7 +68,7 @@ public class NotificationWorker {
         notificationRepository.save(notification);
 
         try{
-            sendEmail(message);
+            dispatchToProvider(notification, message);
 
             notification.setStatus(NotificationStatus.SENT);
             notification.setRetryCount(message.getRetryCount());
@@ -74,6 +77,23 @@ public class NotificationWorker {
             log.info("Notification id={} sent successfully", notification.getId());
         }catch(Exception e) {
             handleFailure(notification, message, e);
+        }
+    }
+
+    private void dispatchToProvider(Notification notification, NotificationMessage message) throws Exception {
+
+        if(random.nextDouble() < simulateFailureRate){
+            throw new RuntimeException("Simulated Provider Failure");
+        }
+
+        // get the channel
+        NotificationChannel channel = notification.getChannel();
+
+        switch(channel){    // route to proper provider
+            case EMAIL -> emailProvider.send(message.getRecipientEmail(), message.getSubject(), message.getMessage());
+            case SMS -> smsProvider.send(notification.getRecipientPhone(), message.getMessage());
+            case PUSH -> throw new UnsupportedOperationException("Push notifications not implemented yet");
+            default -> throw new IllegalArgumentException("Unknown notification channel: " + channel);
         }
     }
 

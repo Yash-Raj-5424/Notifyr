@@ -4,6 +4,7 @@ import com.yash.Notifyr.dto.NotificationMessage;
 import com.yash.Notifyr.dto.NotificationRequest;
 import com.yash.Notifyr.dto.NotificationResponse;
 import com.yash.Notifyr.entity.Notification;
+import com.yash.Notifyr.entity.NotificationChannel;
 import com.yash.Notifyr.entity.NotificationStatus;
 import com.yash.Notifyr.exception.NotificationNotFoundException;
 import com.yash.Notifyr.repository.NotificationRepository;
@@ -53,6 +54,7 @@ public class NotificationService {
                 .subject(request.getSubject())
                 .message(request.getMessage())
                 .status(NotificationStatus.QUEUED)
+                .channel(NotificationChannel.EMAIL)
                 .build();
 
         notification = notificationRepository.save(notification);   // save to db as QUEUED
