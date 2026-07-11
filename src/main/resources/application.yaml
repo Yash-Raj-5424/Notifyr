@@ -77,5 +77,19 @@ notification:
     queue: campaign.dispatch.queue
     routing-key: campaign.dispatch.route
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
 server:
   port: 8080

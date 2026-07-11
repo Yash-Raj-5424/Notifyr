@@ -18,7 +18,15 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private static final String API_KEY_HEADER = "X-API-KEY";
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws IOException, ServletException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response
+            , FilterChain filterChain) throws IOException, ServletException {
+
+        String path = request.getRequestURI();
+
+        if(path.startsWith("/actuator") || path.startsWith("/swagger") || path.startsWith("/v3/api-docs")){
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String providedKey = request.getHeader(API_KEY_HEADER);
 
