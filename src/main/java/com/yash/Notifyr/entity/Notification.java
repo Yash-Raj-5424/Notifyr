@@ -28,6 +28,8 @@ public class Notification {
 
     private String recipientPhone;
 
+    private String recipientDeviceToken;
+
     @Column(nullable = false)
     private String subject;
 

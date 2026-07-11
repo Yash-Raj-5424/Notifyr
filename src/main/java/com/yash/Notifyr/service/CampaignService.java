@@ -135,11 +135,14 @@ public class CampaignService {
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new CampaignNotFoundException(campaignId));
 
-        if(campaign.getStatus() != CampaignStatus.DRAFT && campaign.getStatus() != CampaignStatus.SCHEDULED){
+        if(campaign.getStatus() != CampaignStatus.DRAFT &&
+                campaign.getStatus() != CampaignStatus.SCHEDULED){
             throw new CampaignAlreadySentException(campaign.getId(), campaign.getStatus());
         }
 
-        if(campaign.getChannel() != NotificationChannel.EMAIL && campaign.getChannel() != NotificationChannel.SMS){
+        if(campaign.getChannel() != NotificationChannel.EMAIL &&
+                campaign.getChannel() != NotificationChannel.SMS &&
+                campaign.getChannel() != NotificationChannel.PUSH){
             throw new UnsupportedChannelException(campaign.getChannel());
         }
 
@@ -190,8 +193,10 @@ public class CampaignService {
 
                 if(campaign.getChannel() == NotificationChannel.EMAIL){
                     notificationBuilder.recipientEmail(recipient.getEmail());
-                } else if(campaign.getChannel() == NotificationChannel.SMS){
+                }else if(campaign.getChannel() == NotificationChannel.SMS){
                     notificationBuilder.recipientPhone(recipient.getPhoneNumber());
+                }else if(campaign.getChannel() == NotificationChannel.PUSH){
+                    notificationBuilder.recipientDeviceToken(recipient.getDeviceToken());
                 }
 
                 Notification notification = notificationBuilder.build();
@@ -209,11 +214,14 @@ public class CampaignService {
                 try{
                     rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
 
-                    log.info("Campaign {} : queued notification {} for recipient {} via {}",
-                            campaign.getId(), notification.getId(),
-                            campaign.getChannel() == NotificationChannel.SMS ? recipient.getPhoneNumber() :
-                                    recipient.getEmail(),
-                            campaign.getChannel());
+                    String recipientIdentifier = switch(campaign.getChannel()) {
+                        case SMS -> recipient.getPhoneNumber();
+                        case PUSH -> recipient.getDeviceToken();
+                        default -> recipient.getEmail();
+                    };
+
+                    log.info("Campaign {} : queued notification {} for recipient {} via {}"
+                            , campaign.getId(), notification.getId(), recipientIdentifier, campaign.getChannel());
 
                 }catch (Exception e) {
                     notification.setStatus(NotificationStatus.FAILED);

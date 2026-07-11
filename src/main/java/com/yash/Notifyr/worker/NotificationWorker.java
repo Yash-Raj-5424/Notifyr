@@ -92,9 +92,16 @@ public class NotificationWorker {
         switch(channel){    // route to proper provider
             case EMAIL -> emailProvider.send(message.getRecipientEmail(), message.getSubject(), message.getMessage());
             case SMS -> smsProvider.send(notification.getRecipientPhone(), message.getMessage());
-            case PUSH -> throw new UnsupportedOperationException("Push notifications not implemented yet");
+            case PUSH -> simulatePushSend(notification);
             default -> throw new IllegalArgumentException("Unknown notification channel: " + channel);
         }
+    }
+
+    private void simulatePushSend(Notification notification) throws InterruptedException {
+        Thread.sleep(1000);  // simulate some processing time
+        log.info("Simulating push notification sent to device token={} | message='{}'"
+                , notification.getRecipientDeviceToken(),
+                notification.getMessage());
     }
 
     private void sendEmail(NotificationMessage message) throws Exception {
