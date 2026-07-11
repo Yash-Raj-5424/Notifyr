@@ -10,12 +10,17 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/notifyr_db?TimeZone=Asia/Kolkata
     username: notifyr_user
-    password:  notifyr_password
+    password: notifyr_password
     driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -46,7 +51,7 @@ notification:
     auth-token: ${TWILIO_AUTH_TOKEN}
     from-number: ${TWILIO_FROM_NUMBER}
   simulate-failure-rate: 0.0
-  api-key: ${API_KEY}
+  api-key: ${API_KEY:default-api-key-for-fallback}
   queue:
     name: notification.queue
   exchange:
