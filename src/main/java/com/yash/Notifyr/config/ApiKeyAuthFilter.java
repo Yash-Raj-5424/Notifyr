@@ -25,7 +25,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         if(path.startsWith("/actuator") ||
                 path.startsWith("/swagger") ||
-                path.startsWith("/v3/api-docs")
+                path.startsWith("/v3/api-docs") ||
+                path.startsWith("/auth")
         ){
             filterChain.doFilter(request, response);
             return;
