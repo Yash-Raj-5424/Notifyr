@@ -10,6 +10,7 @@ import com.yash.Notifyr.repository.CampaignRepository;
 import com.yash.Notifyr.repository.NotificationRepository;
 import com.yash.Notifyr.repository.RecipientRepository;
 import com.yash.Notifyr.repository.TemplateRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -32,6 +33,7 @@ public class CampaignService {
     private final NotificationRepository notificationRepository;
     private final TemplateService templateService;
     private final RabbitTemplate rabbitTemplate;
+    private final MeterRegistry meterRegistry;
 
     @Value("${notification.exchange.name}")
     private String exchangeName;
@@ -85,6 +87,10 @@ public class CampaignService {
                 .build();
 
         campaign = campaignRepository.save(campaign);
+
+        meterRegistry.counter("campaigns_created_total", "channel"
+                , campaign.getChannel().toString()).increment();
+
         return mapToResponse(campaign);
     }
 
