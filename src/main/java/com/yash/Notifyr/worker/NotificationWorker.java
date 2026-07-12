@@ -7,6 +7,7 @@ import com.yash.Notifyr.entity.NotificationStatus;
 import com.yash.Notifyr.provider.EmailProvider;
 import com.yash.Notifyr.provider.SmsProvider;
 import com.yash.Notifyr.repository.NotificationRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -26,6 +27,7 @@ public class NotificationWorker {
     private final RabbitTemplate rabbitTemplate;
     private final EmailProvider emailProvider;
     private final SmsProvider smsProvider;
+    private final MeterRegistry meterRegistry;
 
     @Value("${notification.retry.exchange}")
     private String retryExchangeName;
@@ -74,7 +76,11 @@ public class NotificationWorker {
             notification.setRetryCount(message.getRetryCount());
             notificationRepository.save(notification);
 
+            meterRegistry.counter("notifications_sent_total", "channel"
+                    , notification.getChannel().toString()).increment();
+
             log.info("Notification id={} sent successfully", notification.getId());
+
         }catch(Exception e) {
             handleFailure(notification, message, e);
         }
@@ -133,6 +139,11 @@ public class NotificationWorker {
             );
 
             rabbitTemplate.convertAndSend(dlqExchangeName, dlqRoutingKey, dlqMessage);
+
+            meterRegistry.counter("notifications_failed_total", "channel"
+                    ,notification.getChannel().toString()).increment();
+            meterRegistry.counter("dead_letter_messages_total").increment();
+
             log.error("Notification id={} failed after {} attempts. Sent to DLQ. Error: {}", notification.getId(),
                     nextRetryCount-1, e.getMessage());
 
@@ -160,6 +171,9 @@ public class NotificationWorker {
         };
 
         rabbitTemplate.convertAndSend(retryExchangeName, routingKey, retryMessage);
+
+        meterRegistry.counter("retry_attempts_total", "channel"
+                ,notification.getChannel().toString()).increment();
 
         log.warn("Notification id={} failed on attempt {}. Retrying in {}. Error: {}", notification.getId(),
                 nextRetryCount, routingKey, e.getMessage());
