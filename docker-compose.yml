@@ -5,9 +5,9 @@ services:
     image: postgres:16
     container_name: notifyr_postgres
     environment:
-      POSTGRES_DB: notifyr_db
-      POSTGRES_USER: notifyr_user
-      POSTGRES_PASSWORD: notifyr_password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -17,8 +17,8 @@ services:
     image: rabbitmq:3.13-management
     container_name: notify_rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: notifyr_user
-      RABBITMQ_DEFAULT_PASS: notifyr_password
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     ports:
       - "5672:5672"   # AMQP protocol port
       - "15672:15672" # Management UI port
@@ -44,5 +44,30 @@ services:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
+
+  app:
+    build: .
+    container_name: notifyr_app
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    ports:
+      - "8080:8080"
+    environment:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}?TimeZone=Asia/Kolkata
+        SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+        SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+        SPRING_RABBITMQ_HOST: rabbitmq
+        SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+        SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+        SPRING_DATA_REDIS_HOST: redis
+        MAIL_USERNAME: ${MAIL_USERNAME}
+        MAIL_PASSWORD: ${MAIL_PASSWORD}
+        TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+        TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+        TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+        API_KEY: ${API_KEY}
+        NOTIFICATION_JWT_SECRET: ${JWT_SECRET}
 volumes:
   postgres_data:
