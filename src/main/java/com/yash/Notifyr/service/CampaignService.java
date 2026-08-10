@@ -3,6 +3,7 @@ package com.yash.Notifyr.service;
 import com.yash.Notifyr.dto.CampaignDispatchMessage;
 import com.yash.Notifyr.dto.CampaignRequest;
 import com.yash.Notifyr.dto.CampaignResponse;
+import com.yash.Notifyr.dto.CampaignSummary;
 import com.yash.Notifyr.dto.NotificationMessage;
 import com.yash.Notifyr.entity.*;
 import com.yash.Notifyr.exception.*;
@@ -101,9 +102,9 @@ public class CampaignService {
     }
 
     public List<CampaignResponse> getAll(){
-        return campaignRepository.findAll()
+        return campaignRepository.findAllSummaries()
                 .stream()
-                .map(this::mapToResponse)
+                .map(this::mapSummaryToResponse)
                 .toList();
     }
 
@@ -317,6 +318,24 @@ public class CampaignService {
                 campaign.getCreatedAt(),
                 campaign.getUpdatedAt(),
                 campaign.getScheduledTime()
+        );
+    }
+
+    private CampaignResponse mapSummaryToResponse(CampaignSummary summary) {
+        return new CampaignResponse(
+                summary.getId(),
+                summary.getName(),
+                summary.getDescription(),
+                summary.getChannel(),
+                summary.getTemplateId(),
+                List.of(),
+                List.of(),
+                summary.getAudienceLanguage(),
+                Map.of(),
+                summary.getStatus(),
+                summary.getCreatedAt(),
+                summary.getUpdatedAt(),
+                summary.getScheduledTime()
         );
     }
 

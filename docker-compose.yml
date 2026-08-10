@@ -69,5 +69,6 @@ services:
         TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
         API_KEY: ${API_KEY}
         NOTIFICATION_JWT_SECRET: ${JWT_SECRET}
+        SERVER_PORT: 8080
 volumes:
   postgres_data:

@@ -50,6 +50,9 @@ public class NotificationWorker {
     @Value("${notification.simulate-failure-rate:0.0}")
     private double simulateFailureRate;
 
+    @Value("${notification.push.delay-ms:1000}")
+    private long pushDelayMs;
+
     private static final int MAX_RETRIES = 3;
     private final Random random = new Random();
 
@@ -104,7 +107,7 @@ public class NotificationWorker {
     }
 
     private void simulatePushSend(Notification notification) throws InterruptedException {
-        Thread.sleep(1000);  // simulate some processing time
+        Thread.sleep(pushDelayMs);  // simulate some processing time
         log.info("Simulating push notification sent to device token={} | message='{}'"
                 , notification.getRecipientDeviceToken(),
                 notification.getMessage());

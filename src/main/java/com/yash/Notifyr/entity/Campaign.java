@@ -36,13 +36,13 @@ public class Campaign {
     @Column(nullable = false)
     private Long templateId;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "campaign_recipients", joinColumns = @JoinColumn(name = "campaign_id"))
     @Column(name = "recipient_id")
     @Builder.Default
     private List<Long> recipientIds = new ArrayList<>();
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "campaign_audience_tags", joinColumns = @JoinColumn(name = "campaign_id"))
     @Column(name = "tag")
     @Builder.Default
@@ -50,7 +50,7 @@ public class Campaign {
 
     private String audienceLanguage;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "campaign_template_variables", joinColumns = @JoinColumn(name = "campaign_id"))
     @MapKeyColumn(name = "var_key")
     @Column(name = "var_value")

@@ -34,3 +34,11 @@ build/
 
 # Environment variables
 .env
+
+loadtest/
+
+context.md
+
+src/main/java/com/yash/Notifyr/provider/MockEmailProvider.java
+src/main/java/com/yash/Notifyr/provider/MockSmsProvider.java
+questions.md

@@ -51,6 +51,9 @@ notification:
     auth-token: ${TWILIO_AUTH_TOKEN}
     from-number: ${TWILIO_FROM_NUMBER}
   simulate-failure-rate: 0.0
+  mock-provider: ${MOCK_PROVIDER:false}
+  push:
+    delay-ms: ${PUSH_DELAY_MS:1000}
   api-key: ${API_KEY:default-api-key-for-fallback}
   queue:
     name: notification.queue
@@ -92,4 +95,4 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
