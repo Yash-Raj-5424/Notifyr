@@ -79,6 +79,8 @@ notification:
     exchange: campaign.dispatch.exchange
     queue: campaign.dispatch.queue
     routing-key: campaign.dispatch.route
+  scheduler:
+    poll-ms: ${CAMPAIGN_POLL_MS:30000}
 
 management:
   endpoints:

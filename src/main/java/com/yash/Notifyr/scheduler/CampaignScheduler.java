@@ -20,7 +20,7 @@ public class CampaignScheduler {
     private final CampaignRepository campaignRepository;
     private final CampaignService campaignService;
 
-    @Scheduled(fixedRate = 30000) // run each 30s
+    @Scheduled(fixedRateString = "${notification.scheduler.poll-ms:30000}") // polls every 30 sec
     public void processScheduledCampaigns(){
 
         List<Campaign> dueCampaigns = campaignRepository.findByStatusAndScheduledTimeLessThanEqual(
