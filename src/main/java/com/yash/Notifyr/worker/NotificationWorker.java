@@ -154,7 +154,7 @@ public class NotificationWorker {
         }
 
         // attempts remaining - sent to retry queue with delays
-        notification.setStatus(NotificationStatus.FAILED);  // flips to PROCESSING on next attempt
+        notification.setStatus(NotificationStatus.WAITING_RETRY);  // flips to PROCESSING on next attempt
         notificationRepository.save(notification);
 
         NotificationMessage retryMessage = new NotificationMessage(
