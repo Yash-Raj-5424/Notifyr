@@ -24,8 +24,9 @@ public class TemplateService {
 
     public TemplateResponse create(TemplateRequest request){
 
-        templateRepository.findByName(request.getName()).ifPresent(template -> {
-            throw new TemplateNotFoundException("Template with name " + request.getName() + " already exists");
+        templateRepository.findByName(request.getName()).ifPresent(
+                template -> {
+            throw new DuplicateTemplateNameException("Template with name " + request.getName() + " already exists");
         });
 
         Template template = Template.builder()

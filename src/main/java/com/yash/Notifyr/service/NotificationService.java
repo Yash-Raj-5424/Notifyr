@@ -74,7 +74,7 @@ public class NotificationService {
             log.info("Notification {} queued for recipient {}", notification.getId(), notification.getRecipientEmail());
         }catch (Exception e){
             notification.setStatus(NotificationStatus.FAILED);
-            notification.setFailureReason("Failed to publish to queue: {}" + e.getMessage());
+            notification.setFailureReason("Failed to publish to queue: " + e.getMessage());
             notificationRepository.save(notification);
             log.error("Failed to publish notification {} to queue: {}"
                     , notification.getId(), e.getMessage());
