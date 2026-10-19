@@ -90,4 +90,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(TemplateValidationException.class)
+    public ResponseEntity<Map<String, String>> handleTemplateValidation(TemplateValidationException ex) {
+        return ResponseEntity
+                .status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
 }

@@ -177,6 +177,16 @@ public class CampaignService {
             Template template = templaterepository.findById(campaign.getTemplateId())
                     .orElseThrow(() -> new TemplateNotFoundException(campaign.getTemplateId()));
 
+            // fail fast if the template references variables the campaign doesn't provide
+            Map<String, String> validationVars = new HashMap<>(
+                    campaign.getTemplateVariables() != null ?
+                    campaign.getTemplateVariables() : Map.of()
+            );
+            validationVars.putIfAbsent("name", "");
+            validationVars.putIfAbsent("email", "");
+
+            templateService.validateVariables(template.getSubject(), template.getBody(), validationVars);
+
             // find all recipients based on targeting criteria
             List<Recipient> targetRecipients = resolveRecipients(campaign);
 

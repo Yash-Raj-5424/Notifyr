@@ -5,12 +5,15 @@ import com.yash.Notifyr.dto.TemplateResponse;
 import com.yash.Notifyr.entity.Template;
 import com.yash.Notifyr.exception.DuplicateTemplateNameException;
 import com.yash.Notifyr.exception.TemplateNotFoundException;
+import com.yash.Notifyr.exception.TemplateValidationException;
 import com.yash.Notifyr.repository.TemplateRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -96,6 +99,32 @@ public class TemplateService {
 
         return result.toString();
     }
+
+    public Set<String> findPlaceholders(String text){
+        if(text == null){
+            return Set.of();
+        }
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(text);
+        Set<String> placeholders = new LinkedHashSet<>();
+        while(matcher.find()){
+            placeholders.add(matcher.group(1).trim());
+        }
+        return placeholders;
+    }
+
+    public void validateVariables(String subject, String body, Map<String, String> variables){
+        Set<String> requiredPlaceholders = new LinkedHashSet<>(findPlaceholders(subject));
+        requiredPlaceholders.addAll(findPlaceholders(body));
+
+        List<String> missing = requiredPlaceholders.stream()
+                .filter(token -> variables == null || variables.get(token) == null)
+                .toList();
+
+        if(!missing.isEmpty()){
+            throw new TemplateValidationException(missing);
+        }
+    }
+
     private TemplateResponse mapToResponse(Template template) {
         return new TemplateResponse(
                 template.getId(),
