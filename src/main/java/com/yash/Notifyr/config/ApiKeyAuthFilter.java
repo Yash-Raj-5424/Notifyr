@@ -9,6 +9,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 @Component
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
@@ -18,8 +20,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private static final String API_KEY_HEADER = "X-API-KEY";
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response
-            , FilterChain filterChain) throws IOException, ServletException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws IOException, ServletException {
 
         String path = request.getRequestURI();
 
@@ -34,7 +39,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         String providedKey = request.getHeader(API_KEY_HEADER);
 
-        if(providedKey == null || !providedKey.equals(configuredApiKey)){
+        boolean isValidKey = providedKey != null
+                && MessageDigest.isEqual(providedKey.getBytes(StandardCharsets.UTF_8),
+                configuredApiKey.getBytes(StandardCharsets.UTF_8));
+
+        if(!isValidKey){
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
             response.getWriter().write("{\"error\": \"Unauthorized: Invalid or missing API key\"}");
