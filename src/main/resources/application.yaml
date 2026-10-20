@@ -81,6 +81,8 @@ notification:
     routing-key: campaign.dispatch.route
   scheduler:
     poll-ms: ${CAMPAIGN_POLL_MS:30000}
+  idempotency:
+    fail-open: ${IDEMPOTENCY_FAIL_OPEN:true}
 
 management:
   endpoints:
