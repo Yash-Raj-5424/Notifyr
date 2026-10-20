@@ -10,8 +10,6 @@ import com.yash.Notifyr.exception.NotificationNotFoundException;
 import com.yash.Notifyr.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -23,14 +21,8 @@ import java.time.Duration;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final RabbitTemplate rabbitTemplate;
+    private final NotificationPublisher notificationPublisher;
     private final RedisTemplate<String, NotificationResponse> redisTemplate;
-
-    @Value("${notification.exchange.name}")
-    private String exchangeName;
-
-    @Value("${notification.routing-key}")
-    private String routingKey;
 
     private static final String IDEMPOTENCY_KEY_PREFIX = "idempotency:";
     private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
@@ -69,15 +61,9 @@ public class NotificationService {
         );
 
         // publish to rabbitmq
-        try {
-            rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
+        boolean published = notificationPublisher.publishWithRetryFallback(notification, message);
+        if(published){
             log.info("Notification {} queued for recipient {}", notification.getId(), notification.getRecipientEmail());
-        }catch (Exception e){
-            notification.setStatus(NotificationStatus.FAILED);
-            notification.setFailureReason("Failed to publish to queue: " + e.getMessage());
-            notificationRepository.save(notification);
-            log.error("Failed to publish notification {} to queue: {}"
-                    , notification.getId(), e.getMessage());
         }
 
         NotificationResponse response = mapToResponse(notification);

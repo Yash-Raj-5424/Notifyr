@@ -30,6 +30,7 @@ public class CampaignServiceTest {
     @Mock private RecipientRepository recipientRepository;
     @Mock private NotificationRepository notificationRepository;
     @Mock private TemplateService templateService;
+    @Mock private NotificationPublisher notificationPublisher;
     @Mock private RabbitTemplate rabbitTemplate;
 
     @InjectMocks
