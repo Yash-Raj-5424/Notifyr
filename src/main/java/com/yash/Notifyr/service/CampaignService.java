@@ -33,14 +33,9 @@ public class CampaignService {
     private final RecipientRepository recipientRepository;
     private final NotificationRepository notificationRepository;
     private final TemplateService templateService;
+    private final NotificationPublisher notificationPublisher;
     private final RabbitTemplate rabbitTemplate;
     private final MeterRegistry meterRegistry;
-
-    @Value("${notification.exchange.name}")
-    private String exchangeName;
-
-    @Value("${notification.routing-key}")
-    private String routingKey;
 
     @Value("${notification.campaign-dispatch.exchange}")
     private String campaignDispatchExchangeName;
@@ -228,9 +223,9 @@ public class CampaignService {
                         0
                 );
 
-                try{
-                    rabbitTemplate.convertAndSend(exchangeName, routingKey, message);
+                boolean published = notificationPublisher.publishWithRetryFallback(notification, message);
 
+                if(published){
                     String recipientIdentifier = switch(campaign.getChannel()) {
                         case SMS -> recipient.getPhoneNumber();
                         case PUSH -> recipient.getDeviceToken();
@@ -239,14 +234,10 @@ public class CampaignService {
 
                     log.info("Campaign {} : queued notification {} for recipient {} via {}"
                             , campaign.getId(), notification.getId(), recipientIdentifier, campaign.getChannel());
-
-                }catch (Exception e) {
-                    notification.setStatus(NotificationStatus.FAILED);
-                    notification.setFailureReason("Failed to publish to queue: " + e.getMessage());
-                    notificationRepository.save(notification);
+                }else{
                     failedToQueue++;
-                    log.error("Campaign {} : failed to queue notification {} for recipient {}: {}",
-                            campaign.getId(), notification.getId(), recipient.getEmail(), e.getMessage());
+                    log.error("Campaign {} : failed to queue notification {} for recipient {}"
+                            , campaign.getId(), notification.getId(), recipient.getEmail());
                 }
 
             }
