@@ -42,3 +42,4 @@ context.md
 src/main/java/com/yash/Notifyr/provider/MockEmailProvider.java
 src/main/java/com/yash/Notifyr/provider/MockSmsProvider.java
 questions.md
+decisions.md
