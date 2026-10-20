@@ -5,6 +5,7 @@ import com.yash.Notifyr.dto.NotificationRequest;
 import com.yash.Notifyr.dto.NotificationResponse;
 import com.yash.Notifyr.entity.Notification;
 import com.yash.Notifyr.entity.NotificationStatus;
+import com.yash.Notifyr.exception.IdempotencyInProgressException;
 import com.yash.Notifyr.exception.ServiceUnavailableException;
 import com.yash.Notifyr.repository.NotificationRepository;
 import io.micrometer.core.instrument.Counter;
@@ -19,6 +20,8 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -80,6 +83,8 @@ public class NotificationServiceTest {
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("idempotency:new-key")).thenReturn(null);
+        when(valueOperations.setIfAbsent(eq("idempotency:new-key"), any(NotificationResponse.class)
+                , any(Duration.class))).thenReturn(true);
         when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
         when(notificationPublisher.publishWithRetryFallback(any(Notification.class)
                 , any(NotificationMessage.class))).thenReturn(true);
@@ -220,6 +225,8 @@ public class NotificationServiceTest {
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("idempotency:set-down")).thenReturn(null);
+        when(valueOperations.setIfAbsent(eq("idempotency:set-down"), any(NotificationResponse.class)
+                , any(Duration.class))).thenReturn(true);
         when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
         when(notificationPublisher.publishWithRetryFallback(any(Notification.class)
                 , any(NotificationMessage.class))).thenReturn(true);
@@ -232,6 +239,57 @@ public class NotificationServiceTest {
         assertThat(result.getId()).isEqualTo(6L);
         assertThat(result.getStatus()).isEqualTo(NotificationStatus.QUEUED);
         verify(counter).increment();
+    }
+
+    @Test
+    void sendNotification_whenKeyAlreadyInProgress_throwsConflict(){
+        NotificationResponse marker = new NotificationResponse(); // id null = in-progress marker
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("idempotency:in-flight")).thenReturn(marker);
+        when(meterRegistry.counter("idempotency_conflicts_total")).thenReturn(counter);
+
+        assertThatThrownBy(() -> notificationService.sendNotification(request, "in-flight"))
+                .isInstanceOf(IdempotencyInProgressException.class);
+
+        verify(counter).increment();
+        verify(notificationRepository, never()).save(any());
+        verify(notificationPublisher, never()).publishWithRetryFallback(any(), any());
+    }
+
+    @Test
+    void sendNotification_whenConcurrentRequestCompletes_returnsItsResponse(){
+        NotificationResponse winnerResponse = new NotificationResponse();
+        winnerResponse.setId(42L);
+        winnerResponse.setStatus(NotificationStatus.QUEUED);
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("idempotency:race-key")).thenReturn(null, winnerResponse);
+        when(valueOperations.setIfAbsent(eq("idempotency:race-key"), any(NotificationResponse.class)
+                , any(Duration.class))).thenReturn(false);
+
+        NotificationResponse result = notificationService.sendNotification(request, "race-key");
+
+        assertThat(result.getId()).isEqualTo(42L);
+        verify(notificationRepository, never()).save(any());
+        verify(notificationPublisher, never()).publishWithRetryFallback(any(), any());
+    }
+
+    @Test
+    void sendNotification_whenConcurrentRequestStillRunning_throwsConflict(){
+        NotificationResponse marker = new NotificationResponse(); // id null = in-progress marker
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("idempotency:race-key")).thenReturn(null, marker);
+        when(valueOperations.setIfAbsent(eq("idempotency:race-key"), any(NotificationResponse.class)
+                , any(Duration.class))).thenReturn(false);
+        when(meterRegistry.counter("idempotency_conflicts_total")).thenReturn(counter);
+
+        assertThatThrownBy(() -> notificationService.sendNotification(request, "race-key"))
+                .isInstanceOf(IdempotencyInProgressException.class);
+
+        verify(counter).increment();
+        verify(notificationRepository, never()).save(any());
     }
 
 }

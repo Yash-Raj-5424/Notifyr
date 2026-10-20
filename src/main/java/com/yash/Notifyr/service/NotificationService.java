@@ -6,6 +6,7 @@ import com.yash.Notifyr.dto.NotificationResponse;
 import com.yash.Notifyr.entity.Notification;
 import com.yash.Notifyr.entity.NotificationChannel;
 import com.yash.Notifyr.entity.NotificationStatus;
+import com.yash.Notifyr.exception.IdempotencyInProgressException;
 import com.yash.Notifyr.exception.NotificationNotFoundException;
 import com.yash.Notifyr.exception.ServiceUnavailableException;
 import com.yash.Notifyr.repository.NotificationRepository;
@@ -34,19 +35,52 @@ public class NotificationService {
 
     private static final String IDEMPOTENCY_KEY_PREFIX = "idempotency:";
     private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
+    private static final Duration IDEMPOTENCY_CLAIM_TTL = Duration.ofSeconds(60);
 
     public NotificationResponse sendNotification(NotificationRequest request, String idempotencyKey){
 
-        // Check if the idempotency key exists in Redis
-        if(idempotencyKey != null && !idempotencyKey.isBlank()) {
-            String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
+        boolean hasIdempotencyKey = idempotencyKey != null && !idempotencyKey.isBlank();
+        String redisKey = hasIdempotencyKey ? IDEMPOTENCY_KEY_PREFIX + idempotencyKey : null;
 
+        // Atomically claim the key before processing - prevents concurrent duplicates
+        if(hasIdempotencyKey){
             try {
-                NotificationResponse cachedResponse = redisTemplate.opsForValue().get(redisKey);
+                NotificationResponse cached = redisTemplate.opsForValue().get(redisKey);
 
-                if(cachedResponse != null){
+                if(cached != null){
+                    if(cached.getId() == null){
+                        meterRegistry.counter("idempotency_conflicts_total").increment();
+                        log.warn("Request for key {} is already in progress", idempotencyKey);
+                        throw new IdempotencyInProgressException(idempotencyKey);
+                    }
                     log.info("Key already processed. Returning cached response for key: {}", idempotencyKey);
-                    return cachedResponse;
+                    return cached;
+                }
+
+                // SET NX - only one concurrent request can claim the key
+                boolean claimed = Boolean.TRUE.equals(
+                        redisTemplate.opsForValue()
+                                .setIfAbsent(redisKey, new NotificationResponse(), IDEMPOTENCY_CLAIM_TTL));
+
+                if(!claimed){
+                    NotificationResponse current = redisTemplate.opsForValue().get(redisKey);
+
+                    if(current != null && current.getId() == null){
+                        meterRegistry.counter("idempotency_conflicts_total").increment();
+                        log.warn("Concurrent request for key {} detected - losing request rejected"
+                                , idempotencyKey);
+                        throw new IdempotencyInProgressException(idempotencyKey);
+                    }
+
+                    if(current != null){
+                        log.info("Concurrent request for key {} already completed. "
+                                + "Returning its response", idempotencyKey);
+                        return current;
+                    }
+
+                    // claim expired between checks - safe to reject, nothing was duplicated
+                    meterRegistry.counter("idempotency_conflicts_total").increment();
+                    throw new IdempotencyInProgressException(idempotencyKey);
                 }
             }catch(DataAccessException e){
                 meterRegistry.counter("idempotency_failures_total", "op", "get").increment();
@@ -94,9 +128,8 @@ public class NotificationService {
 
         NotificationResponse response = mapToResponse(notification);
 
-        // cache the response
-        if(idempotencyKey != null && !idempotencyKey.isBlank()) {
-            String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
+        // replace the claim marker with the real response
+        if(hasIdempotencyKey) {
             try {
                 redisTemplate.opsForValue().set(redisKey, response, IDEMPOTENCY_TTL);
             } catch (DataAccessException e) {

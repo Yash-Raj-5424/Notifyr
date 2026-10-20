@@ -104,4 +104,11 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(IdempotencyInProgressException.class)
+    public ResponseEntity<Map<String, String>> handleIdempotencyInProgress(IdempotencyInProgressException ex) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
 }
