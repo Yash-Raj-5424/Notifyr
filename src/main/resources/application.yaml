@@ -81,6 +81,12 @@ notification:
     routing-key: campaign.dispatch.route
   scheduler:
     poll-ms: ${CAMPAIGN_POLL_MS:30000}
+  reconciliation:
+    enabled: ${RECONCILE_ENABLED:true}
+    poll-ms: ${RECONCILE_POLL_MS:60000}
+    # must exceed the largest retry TTL, or in-flight retries get re-driven early
+    stuck-after-minutes: ${RECONCILE_STUCK_AFTER_MINUTES:2}
+    batch-size: ${RECONCILE_BATCH_SIZE:100}
   idempotency:
     fail-open: ${IDEMPOTENCY_FAIL_OPEN:true}
 
