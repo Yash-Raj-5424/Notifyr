@@ -7,9 +7,13 @@ import com.yash.Notifyr.entity.Notification;
 import com.yash.Notifyr.entity.NotificationChannel;
 import com.yash.Notifyr.entity.NotificationStatus;
 import com.yash.Notifyr.exception.NotificationNotFoundException;
+import com.yash.Notifyr.exception.ServiceUnavailableException;
 import com.yash.Notifyr.repository.NotificationRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +27,10 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationPublisher notificationPublisher;
     private final RedisTemplate<String, NotificationResponse> redisTemplate;
+    private final MeterRegistry meterRegistry;
+
+    @Value("${notification.idempotency.fail-open:true}")
+    private boolean failOpen;   // read fil-open from config (sender can decide whether or not to)
 
     private static final String IDEMPOTENCY_KEY_PREFIX = "idempotency:";
     private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
@@ -32,11 +40,29 @@ public class NotificationService {
         // Check if the idempotency key exists in Redis
         if(idempotencyKey != null && !idempotencyKey.isBlank()) {
             String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
-            NotificationResponse cachedResponse = redisTemplate.opsForValue().get(redisKey);
 
-            if (cachedResponse != null) {
-                log.info("Key already processed. Returning cached response for key: {}", idempotencyKey);
-                return cachedResponse;
+            try {
+                NotificationResponse cachedResponse = redisTemplate.opsForValue().get(redisKey);
+
+                if(cachedResponse != null){
+                    log.info("Key already processed. Returning cached response for key: {}", idempotencyKey);
+                    return cachedResponse;
+                }
+            }catch(DataAccessException e){
+                meterRegistry.counter("idempotency_failures_total", "op", "get").increment();
+
+                if(!failOpen){
+                    log.error("Redis unavailable and idempotency fail-open is disabled, "
+                            + "rejecting request for key {}: {}", idempotencyKey, e.getMessage()
+                    );
+                    throw new ServiceUnavailableException(
+                            "Idempotency store unavailable. Retry the request later"
+                    );
+                }
+
+                log.warn("Redis unavailable - idempotency check skipped for key {}, "
+                        + "duplicates possible: {}", idempotencyKey, e.getMessage()
+                );
             }
         }
 
@@ -71,7 +97,13 @@ public class NotificationService {
         // cache the response
         if(idempotencyKey != null && !idempotencyKey.isBlank()) {
             String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
-            redisTemplate.opsForValue().set(redisKey, response, IDEMPOTENCY_TTL);
+            try {
+                redisTemplate.opsForValue().set(redisKey, response, IDEMPOTENCY_TTL);
+            } catch (DataAccessException e) {
+                meterRegistry.counter("idempotency_failures_total", "op", "set").increment();
+                log.warn("Failed to cache idempotency response for key {} - "
+                        + "send already succeeded, returning normally: {}", idempotencyKey, e.getMessage());
+            }
         }
 
         return response;

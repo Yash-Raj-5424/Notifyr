@@ -5,17 +5,23 @@ import com.yash.Notifyr.dto.NotificationRequest;
 import com.yash.Notifyr.dto.NotificationResponse;
 import com.yash.Notifyr.entity.Notification;
 import com.yash.Notifyr.entity.NotificationStatus;
+import com.yash.Notifyr.exception.ServiceUnavailableException;
 import com.yash.Notifyr.repository.NotificationRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -27,6 +33,8 @@ public class NotificationServiceTest {
     @Mock private NotificationPublisher notificationPublisher;
     @Mock private RedisTemplate<String, NotificationResponse> redisTemplate;
     @Mock private ValueOperations<String, NotificationResponse> valueOperations;
+    @Mock private MeterRegistry meterRegistry;
+    @Mock private Counter counter;
 
     @InjectMocks
     private NotificationService notificationService;
@@ -39,6 +47,8 @@ public class NotificationServiceTest {
         request.setRecipientEmail("test@example.com");
         request.setSubject("Test Subject");
         request.setMessage("Test Message");
+
+        ReflectionTestUtils.setField(notificationService, "failOpen", true);
     }
 
     @Test
@@ -151,6 +161,77 @@ public class NotificationServiceTest {
         assertThat(result.getStatus()).isEqualTo(NotificationStatus.FAILED);
         assertThat(result.getFailureReason()).contains("connection refused");
         verify(notificationRepository, times(1)).save(any(Notification.class));
+    }
+
+    @Test
+    void sendNotification_whenRedisGetFails_failOpenContinuesAndSends(){
+        Notification saved = Notification.builder()
+                .id(5L)
+                .recipientEmail("test@example.com")
+                .subject("Test Subject")
+                .message("Test Message")
+                .status(NotificationStatus.QUEUED)
+                .build();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("idempotency:down-key"))
+                .thenThrow(new RedisConnectionFailureException("connection refused"));
+        when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
+        when(notificationPublisher.publishWithRetryFallback(any(Notification.class)
+                , any(NotificationMessage.class))).thenReturn(true);
+        when(meterRegistry.counter("idempotency_failures_total", "op", "get")).thenReturn(counter);
+
+        NotificationResponse result = notificationService.sendNotification(request, "down-key");
+
+        assertThat(result.getId()).isEqualTo(5L);
+        assertThat(result.getStatus()).isEqualTo(NotificationStatus.QUEUED);
+        verify(counter).increment();
+        verify(notificationRepository).save(any(Notification.class));
+        verify(notificationPublisher).publishWithRetryFallback(any(Notification.class)
+                , any(NotificationMessage.class));
+    }
+
+    @Test
+    void sendNotification_whenRedisGetFails_failClosedRejects(){
+        ReflectionTestUtils.setField(notificationService, "failOpen", false);
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("idempotency:down-key"))
+                .thenThrow(new RedisConnectionFailureException("connection refused"));
+        when(meterRegistry.counter("idempotency_failures_total", "op", "get")).thenReturn(counter);
+
+        assertThatThrownBy(() -> notificationService.sendNotification(request, "down-key"))
+                .isInstanceOf(ServiceUnavailableException.class);
+
+        verify(counter).increment();
+        verify(notificationRepository, never()).save(any());
+        verify(notificationPublisher, never()).publishWithRetryFallback(any(), any());
+    }
+
+    @Test
+    void sendNotification_whenRedisSetFails_returnsResponseNormally(){
+        Notification saved = Notification.builder()
+                .id(6L)
+                .recipientEmail("test@example.com")
+                .subject("Test Subject")
+                .message("Test Message")
+                .status(NotificationStatus.QUEUED)
+                .build();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("idempotency:set-down")).thenReturn(null);
+        when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
+        when(notificationPublisher.publishWithRetryFallback(any(Notification.class)
+                , any(NotificationMessage.class))).thenReturn(true);
+        doThrow(new RedisConnectionFailureException("connection refused"))
+                .when(valueOperations).set(eq("idempotency:set-down"), any(NotificationResponse.class), any());
+        when(meterRegistry.counter("idempotency_failures_total", "op", "set")).thenReturn(counter);
+
+        NotificationResponse result = notificationService.sendNotification(request, "set-down");
+
+        assertThat(result.getId()).isEqualTo(6L);
+        assertThat(result.getStatus()).isEqualTo(NotificationStatus.QUEUED);
+        verify(counter).increment();
     }
 
 }
