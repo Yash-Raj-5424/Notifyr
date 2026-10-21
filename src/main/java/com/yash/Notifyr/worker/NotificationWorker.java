@@ -7,14 +7,18 @@ import com.yash.Notifyr.entity.NotificationStatus;
 import com.yash.Notifyr.provider.EmailProvider;
 import com.yash.Notifyr.provider.SmsProvider;
 import com.yash.Notifyr.repository.NotificationRepository;
+import com.rabbitmq.client.Channel;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.Optional;
 import java.util.Random;
 
@@ -56,8 +60,27 @@ public class NotificationWorker {
     private static final int MAX_RETRIES = 3;
     private final Random random = new Random();
 
-    @RabbitListener(queues = "${notification.queue.name}")
-    public void handleNotification(NotificationMessage message){
+    @RabbitListener(queues = "${notification.queue.name}", ackMode = "MANUAL")
+    public void handleNotification(NotificationMessage message, Channel channel
+            , @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {
+
+        try {
+            processNotification(message);
+        } catch (Exception e) {
+            // infra failure (DB/broker) - drop instead of requeue to avoid a hot
+            // redelivery loop; the reconciliation sweep re-drives if the row is still stuck
+            meterRegistry.counter("worker_unhandled_failures_total").increment();
+            log.error("Unexpected failure processing notification {} - nacking without requeue, "
+                    + "reconciliation sweep will re-drive if still stuck: {}"
+                    , message.getNotificationId(), e.getMessage());
+            channel.basicNack(deliveryTag, false, false);
+            return;
+        }
+
+        channel.basicAck(deliveryTag, false);
+    }
+
+    private void processNotification(NotificationMessage message) {
         log.info("Received notification job for id={}, recipient={}", message.getNotificationId(),
                 message.getRecipientEmail());
 
@@ -69,6 +92,15 @@ public class NotificationWorker {
         }
 
         Notification notification = optionalNotification.get();
+
+        // a redelivery after a crash between the SENT save and the ack must not send twice
+        if(notification.getStatus() == NotificationStatus.SENT){
+            meterRegistry.counter("worker_duplicate_deliveries_skipped_total").increment();
+            log.info("Notification id={} already SENT - skipping duplicate delivery"
+                    , notification.getId());
+            return;
+        }
+
         notification.setStatus(NotificationStatus.PROCESSING);
         notificationRepository.save(notification);
 
